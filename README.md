@@ -1,2 +1,2 @@
 # Model-robust-standardization-CRT
-This repository provides R functions for implementing methods in the manuscript entitled "Model-robust standardization in cluster-randomized trials".
+This repository contains R functions for the methods described in the manuscript titled ‘Model-Robust Standardization in Cluster-Randomized Trials.’
