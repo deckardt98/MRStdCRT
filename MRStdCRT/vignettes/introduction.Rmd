@@ -1,0 +1,170 @@
+---
+title: "Model-robust standardization in cluster-randomized trials"
+output: html_document
+vignette: >
+  %\VignetteIndexEntry{Introduction to MyPackage}
+  %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{rmarkdown::html_vignette}
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+# Introduction
+
+The \`MRStdCRT\`\` package provides tools for computing the model-robust 
+standardization estimator with jackknife variance estimator for the cluster 
+average treatment effect(c-ATE) and individual average treatment effect(i-ATE) 
+in clustered randomized trials (CRTs).
+
+# Model robust standardization
+
+In CRT, assume the cluster size $N_{i}$ is the natural cluster panel
+size. The total sample size of the study is $N=\sum_{i=1}^m N_{i}$. Let
+$A_i\in\{0,1\}$ be the randomized cluster-level treatment indicator,
+with $A_i=1$ indicating the assignment to the treatment condition and
+$A_i=0$ to usual care. The potential outcomes framework and define
+$\{Y_{ij}(1),Y_{ij}(0)\}$ as a pair of potential outcomes for each
+individual $j \in \{1,\dots, N_i\}$ under the treatment and usual care
+conditions, respectively. Denote
+$\boldsymbol{X}_i =  {\boldsymbol{X}_{i1},\dots,\boldsymbol{X}_{iN_i}}^\top$
+as the collection of baseline covariates across all individual, and
+$\boldsymbol{H}_i$ as the collection of cluster-level covariates.
+Writing $f(a,b)$ as a pre-specified contrast function, a general class
+of weighted average treatment effect in CRTs is defined as
+$$\Delta_{\omega}=f(\mu_\omega(1),\mu_\omega(0)),$$ where the weighted
+average potential outcome under treatment condition $A_i=a$ is
+\begin{align*}
+\mu_\omega(a)=\frac{E\left((\omega_i/N_i)\sum_{j=1}^{N_i}Y_{ij}(a)\right)}{E(\omega_i)}.
+\end{align*}
+
+In this formulation, $\omega_i$ is a pre-specified cluster-specific
+weight determining the contribution of each cluster to the target
+estimand, and can be at most a function of the cluster size $N_i$, or
+additional cluster-level covariates $\boldsymbol{H}_i$. In CRTs, two
+typical estimands of interest arise from different specifications of
+$\omega_i$. First, setting $\omega_i=1$ gives each cluster equal weight
+and leads to the \emph{cluster-average treatment effect},
+$\Delta_C=f(\mu_C(1),\mu_C(0))$, with \begin{align*}
+\mu_C(a)=E\left(\frac{\sum_{j=1}^{N_i}Y_{ij}(a)}{N_i}\right).
+\end{align*} Second, setting $\omega_i=N_i$ gives equal weight to each
+individual in the study regardless of their cluster membership and leads
+to the \emph{individual-average treatment effect},
+$\Delta_I=f(\mu_I(1),\mu_I(0))$, with \begin{align*}
+\mu_I(a)=\frac{E\left(\sum_{j=1}^{N_i}Y_{ij}(a)\right)}{E(N_i)}.
+\end{align*} Under the general setup, the average potential outcomes can
+be estimated by \begin{align*}
+\widehat{\mu}_\omega(a)=\sum_{i=1}^m \frac{\omega_i}{\omega_{+}}\left\{\underbrace{\widehat{E}(\overline{Y}_{i}|A_i=a,\boldsymbol{X}_i,\boldsymbol{H}_i,N_i)}_{\text{regression prediction}}+\underbrace{\frac{I(A_i=a)\left(\overline{Y}_i-\widehat{E}(\overline{Y}_{i}|A_i=a,\boldsymbol{X}_i,\boldsymbol{H}_i,N_i)\right)}{\pi(\boldsymbol{X}_i,\boldsymbol{H}_i,N_i)^a\left(1-\pi(\boldsymbol{X}_i,\boldsymbol{H}_i,N_i)\right)^{1-a}}}_{\text{weighted cluster-level residual}}\right\},
+\end{align*} where $\omega_{+}=\sum_{i=1}^m \omega_i$ is the sum of
+weights across clusters,
+$\pi(\boldsymbol{X}_i,\boldsymbol{H}_i,N_i)=P(A_i=a|\boldsymbol{X}_i,\boldsymbol{H}_i,N_i)$
+is the conditional randomization probability of each cluster given
+baseline information, and
+$\widehat{E}(\overline{Y}_{i}|A_i=a,\boldsymbol{X}_i,\boldsymbol{H}_i,N_i)$
+is the conditional mean of the cluster average outcome,
+$\overline{Y_i}=N_i^{-1}\sum_{i=1}^{N_i}Y_{ij}$, given baseline
+covariates and cluster size, which could be estimated via any sensible
+outcome regression model.
+
+# Data Structure and Description
+
+In the context of cluster-randomized trials (CRT), we observe the following data 
+vector for each subject $j$ in cluster $i$:
+$\{Y_{ij}, A_{i}, \boldsymbol{X}_{ij}, \boldsymbol{H}_i, N_i\}$, where:
+
+-   $Y_{ij}$ represents the observed outcome for individual $j$ in cluster $i$,
+-   $A_{i}$ is the treatment assignment for cluster $i$,
+-   $\boldsymbol{X}_{ij}$ denotes the individual-level covariates,
+-   $\boldsymbol{H}_i$ denotes the cluster-level covariates, 
+-   $N_i$ is the number of individuals in cluster $i$.
+
+Different working outcome mean models are proposed based on either 
+individual-level observations or cluster-level summarizes (means),
+which can be further used to construct the model-robust standardization estimator 
+for either the weighted **cluster-averaged treatment effect (c-ATE)** or weighted
+**individual-averaged treatment effect (i-ATE)**.
+
+## Syntax
+
+The primary data fitting function is `MRStdCRT_fit`, which generates a
+summary for the target estimands, including both **c-ATE**
+and **i-ATE**. In particular, the output provides:
+
+-   The test statistics for testing non-informative cluster sizes,
+-   The number of clusters,
+-   The cluster sizes, 
+-   The outcome regression model used.
+
+User can call the `MRStdCRT_fit` function as follows:
+
+`MRStdCRT_fit <- function(formula, data, clus_id, trt, prob, method,family,corstr,scale, jack, alpha)`
+
+with the following arguments:
+
+-   `formula`: The model formula for the outcome regression.
+-   `data`: The dataset being analyzed.
+-   `clus_id`: The identifier for the clusters.
+-   `trt`: The treatment variable.
+-   `prob`: The vector of treatment probabilities for each cluster.
+-   `method`: The method used for outcome regression model fitting, i.e.
+    "LM", "LMM", "GEE", "GLMM".
+-   `family`: The distributional family for the outcome model (default
+    is `gaussian(link="identity")`).
+-   `corstr`: The correlation structure used in GEE or GLMM.
+-   `scale`: The scale of estimand including risk difference (RD), risk
+    ratio (RR), and odds ratio (RR).
+-   `jack`: Categorical variable for jackknife variance estimator (default
+    is 1, i.e., the standard jackknife variance estimator).
+-   `alpha`: The significance level (default is 0.05).
+
+# Illustrative example with PPACT data sets
+
+## Illustrative Example
+
+In this example, we demonstrate how to use the `MRStdCRT_fit` function to
+estimate treatment effects in a CRT using the `ppact` dataset. The goal
+is to estimate the cluster-averaged treatment effect (c-ATE) and the
+individual-averaged treatment effect (i-ATE) using the marginal model fitted by 
+generalized estimating equation (GEE).
+
+### Step 1: Prepare the Treatment Assignment Probabilities
+
+Before fitting the model, user needs to calculate the probabilities of
+treatment assignment for each cluster, which is either known by design 
+(e.g., simple randomization and pair-matched randomization) or estimated 
+properly under covariate-constrained randomization. See Section 3.2 in the main
+manuscript for more information.
+
+For example, one can estimate the treatment assignment probabilities as follows:
+
+``` r
+library(MRStdCRT)
+data(ppact)
+
+ppact_prob <- ppact %>%
+  group_by(CLUST) %>%
+  mutate(first_trt = first(INTERVENTION)) %>%
+  ungroup() %>%
+  mutate(prob_A_1 = mean(first_trt == 1, na.rm = TRUE),  # Proportion trt = 1
+         prob_A_0 = mean(first_trt == 0, na.rm = TRUE)) %>%
+  mutate(assigned_value = ifelse(INTERVENTION == 1, prob_A_1, prob_A_0))
+
+prob <- ppact_prob$assigned_value
+```
+
+### Step 2: Fit the `robust_CRT` Model
+
+``` r
+example <- MRStdCRT_fit(
+  formula = PEGS ~ AGE + FEMALE + comorbid + Dep_OR_Anx + pain_count + PEGS_bl +
+    BL_benzo_flag + BL_avg_daily + satisfied_primary + cluster(n),
+  data = ppact,
+  clus_id = "CLUST",
+  trt = "INTERVENTION",
+  prob = prob,
+  method = "GEE",
+  corstr = "independence",
+  scale = "RR"
+)
+example$estimate
+```
