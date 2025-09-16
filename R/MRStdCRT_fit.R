@@ -52,7 +52,7 @@
 #'
 #' example <- MRStdCRT_fit(
 #'   formula = PEGS ~ AGE + FEMALE + comorbid + Dep_OR_Anx + pain_count+PEGS_bl +
-#'    BL_benzo_flag + BL_avg_daily + satisfied_primary + cluster(n),
+#'    BL_benzo_flag + BL_avg_daily + satisfied_primary + n,
 #'  data = ppact,
 #'  cluster = "CLUST",
 #'  trt = "INTERVENTION",
@@ -276,6 +276,7 @@ summary.MRS_obj <- function(object) {
 
   invisible(object)
 }
+
 
 
 
