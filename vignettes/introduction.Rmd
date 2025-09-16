@@ -104,9 +104,9 @@ with the following arguments:
 
 -   `formula`: The model formula for the outcome regression.
 -   `data`: The dataset being analyzed.
--   `clusterID`: The identifier for the clusters.
+-   `cluster`: The identifier for the clusters.
 -   `trt`: The treatment variable.
--   `trtprob`: The vector of treatment probabilities for each cluster.
+-   `trtprob`: The vector of treatment probabilities for each cluster. If NULL, the probability will be calculated.
 -   `method`: The method used for outcome regression model fitting, i.e.
     "GLM", "LMM", "GEE", "GLMM".
 -   `family`: The distributional family for the outcome model (default
@@ -209,4 +209,5 @@ summary(example)
 ## One may also extract specific statistical feature, such as table for point and interval estimates, and standard errors
 example$estimate
 ```
+
 
