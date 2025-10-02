@@ -66,7 +66,7 @@
 
 
 MRStdCRT_fit <- function(formula, data, cluster, trt, trtprob=rep(0.5, nrow(data)), method, family = gaussian(link="identity"),
-                       corstr, scale, jack = 1, alpha=0.05){
+                         corstr, scale, jack = 1, alpha=0.05){
 
   ################################################################
   #                                                              #
@@ -142,8 +142,8 @@ MRStdCRT_fit <- function(formula, data, cluster, trt, trtprob=rep(0.5, nrow(data
 
 
   temp <- MRStdCRT_point(formula, data, cluster, trt, trtprob,
-                           family,
-                           corstr, method, scale)
+                         family,
+                         corstr, method, scale)
 
   data1 <- temp[[1]]
   data_clus <- temp[[2]]
@@ -155,8 +155,8 @@ MRStdCRT_fit <- function(formula, data, cluster, trt, trtprob=rep(0.5, nrow(data
     data_jack <- data %>% filter(.data[[cluster]] != i)
     data_jack <- droplevels(data_jack)
     point_est_jack[which(cluster_names==i),] <- MRStdCRT_point(formula, data_jack, cluster, trt, trtprob[which(data[[cluster]]!=i)],
-                                                                 family,
-                                                                 corstr, method, scale)[[3]]
+                                                               family,
+                                                               corstr, method, scale)[[3]]
   }
   # Jackknife standard error estimation
   if (jack == 1) {
@@ -181,10 +181,14 @@ MRStdCRT_fit <- function(formula, data, cluster, trt, trtprob=rep(0.5, nrow(data
   rownames(table) <-  c("cATE",
                         "iATE")
   colnames(table) <- c("Estimate",
-                       "Std, Error",
+                       "Std. Error",
                        "CI lower",
                        "CI upper")
   table <- as.data.frame(table)
+
+  tstat_est <- table[,"Estimate"] / table[,"Std. Error"]
+  pval_est  <- 2 * pt(abs(tstat_est), df = m-1, lower.tail = FALSE)
+  table[,"p-value"] <- pval_est
 
 
   #test statistic for NICS
@@ -195,8 +199,16 @@ MRStdCRT_fit <- function(formula, data, cluster, trt, trtprob=rep(0.5, nrow(data
 
   ics_test <- c(test_sta, p_val)
 
-  fit_list <- list(estimate=table,m=m,N=temp[[2]]$N,
-                   family=family,model=method,ics = ics_test,alpha=alpha)
+  fit_list <- list(
+    estimate = table,
+    m        = m,
+    N        = temp[[2]]$N,
+    family   = family,
+    model    = method,
+    ics      = ics_test,
+    alpha    = alpha,
+    scale    = scale
+  )
 
   class(fit_list) <- "MRS_obj"
 
@@ -232,71 +244,68 @@ summary.MRS_obj <- function(object) {
   alpha <- if (!is.null(object$alpha)) object$alpha else 0.05
   ci_label <- paste0((1 - alpha/2)*100, "% CI")
 
-  cat("\nModel-robust Standardization CRT Results\n")
+  cat("\nModel-robust Standardization\n")
   cat("=========================================\n")
   cat(sprintf("  Method   : %s\n", object$model))
   cat(sprintf("  Family   : %s (link = %s)\n",
               object$family$family,
               object$family$link))
   cat(sprintf("  Clusters : %d\n", object$m))
+  scale_label <- switch(
+    tolower(object$scale),
+    "rd" = "Risk difference",
+    "rr" = "Risk ratio",
+    "or" = "Odds ratio",
+    object$scale
+  )
+  cat(sprintf("  Scale    : %s\n", scale_label))
 
 
 
-  ## grab and re-format the estimate table
   tbl <- object$estimate
-  ## assume tbl has columns: Estimate, Std, Error, CI lower, CI upper
-  ## rename for convenience
-  colnames(tbl) <- c("Estimate", "SE", "CI_lower", "CI_upper")
-  ## set rownames to c-ATE / i-ATE
   rownames(tbl) <- c("c-ATE", "i-ATE")
 
-  ## build a display table with 3 columns
+  p <- tbl[,"p-value"]
+  stars <- ifelse(p < 0.001, "***",
+                  ifelse(p < 0.01,  "**",
+                         ifelse(p < 0.05,  "*", "")))
+
+  p_str <- ifelse(p < 1e-3, "<0.001", formatC(p, digits = 3, format = "f"))
+
   disp <- data.frame(
-    Estimate = formatC(tbl[,"Estimate"], digits = 3, format = "f"),
-    SE       = formatC(tbl[,"SE"],       digits = 3, format = "f"),
-    `95% CI` = paste0(
+    Estimate     = formatC(tbl[,"Estimate"],     digits = 3, format = "f"),
+    `Std. Error` = formatC(tbl[,"Std. Error"],   digits = 3, format = "f"),
+    `95% CI`     = paste0(
       "(",
-      formatC(tbl[,"CI_lower"], digits = 3, format = "f"),
+      formatC(tbl[,"CI lower"], digits = 3, format = "f"),
       ", ",
-      formatC(tbl[,"CI_upper"], digits = 3, format = "f"),
+      formatC(tbl[,"CI upper"], digits = 3, format = "f"),
       ")"
     ),
-    row.names = rownames(tbl),
-    check.names = FALSE,
+    `p-value`    = paste0(p_str, stars),
+    row.names    = rownames(tbl),
+    check.names  = FALSE,
     stringsAsFactors = FALSE
   )
 
   cat("\nEstimates:\n")
   print(disp)
 
-  cat("\nNICS test for no informative cluster size:\n")
+  cat("\nTest for no informative cluster size:\n")
   cat(sprintf("  Statistic: %.4f\n", object$ics[1]))
-  cat(sprintf("  p-value  : %.4f\n\n", object$ics[2]))
-  cat(sprintf("  DF       : %d\n", object$m-1))
+
+  p_ics <- object$ics[2]
+  stars_ics <- ifelse(p_ics < 0.001, "***",
+                      ifelse(p_ics < 0.01,  "**",
+                             ifelse(p_ics < 0.05,  "*", "")))
+  p_ics_str <- ifelse(p_ics < 1e-3, "<0.001",
+                      formatC(p_ics, digits = 4, format = "f"))
+
+  cat(sprintf("  p-value  : %s%s\n\n", p_ics_str, stars_ics))
+  #cat(sprintf("  DF       : %d\n", object$m-1))
 
   invisible(object)
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
