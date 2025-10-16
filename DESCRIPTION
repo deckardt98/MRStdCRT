@@ -2,7 +2,7 @@ Package: MRStdCRT
 Type: Package
 Title: Model-robust standardization in cluster-randomized trials
 Version: 0.1.0
-Author: Fan Li, Jiaqi Tong, Chao Cheng, Xi Fang, Brennan C. Kahan, Bingkai Wang
+Author: Fan Li, Jiaqi Tong, Chao Cheng, Xi Fang, Changjun Li, Brennan C. Kahan, Bingkai Wang
 Maintainer: Jiaqi Tong <jiaqi.tong@yale.edu>
 Description: This package provides a simple and accesible methods to standardize output from user-specified regression model to estimate the estimand for treatment effect parameters in cluster-randomized trials(CRT). The estimands including cluster-average and individual-average treatment effects
 License: GPL-3
