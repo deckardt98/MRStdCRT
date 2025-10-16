@@ -1,4 +1,4 @@
-#' Modet-robust standardization in CRT Point Estimate
+#' Model-robust standardization in CRT Point Estimate
 #'
 #' This function calculates a model-robust point estimate for a clustered randomized trial (CRT).
 #'
@@ -26,8 +26,8 @@
 #'                               (ii) iate: point estimate for individual-average treatment effect; (iii) test_NICS: value of test statistics for non-informative cluster sizes.
 
 MRStdCRT_point <- function(formula, data, cluster, trt, trtprob,
-                             family=gaussian(link="identity"),
-                             corstr, method="GLM", scale){
+                           family=gaussian(link="identity"),
+                           corstr, method="GLM", scale){
   ################################################################
   #                                                              #
   #   Input:                                                     #
@@ -58,42 +58,38 @@ MRStdCRT_point <- function(formula, data, cluster, trt, trtprob,
   #          and odds ratios ('OR').                             #
   #                                                              #
   ################################################################
-
+  
   ## This file contains functions calculating point estimates, associated 95% CIs,
   ## and p-values for testing the non-informative cluster sizes for the methods
   ## described in the manuscript titled ‘Model-Robust Standardization in Cluster-Randomized Trials.’
-
+  
   # Function calculating point estimates
-
-  # Example:
-  # formula = Y~X1+X2+cluster(N+H1+H2)
-
-
+  
   # Validate inputs
-
+  
   tryCatch({
     stopifnot(is.data.frame(data))
   }, error = function(e) {
     stop("Error: The provided object is not of class 'data.frame'.")
   })
-
+  
   tryCatch({
     stopifnot(inherits(family, "family"))
   }, error = function(e) {
     stop("Error: The provided family is not a 'family' object.")
   })
-
+  
   stopifnot(is.character(cluster), is.character(trt))
-
+  
   if (method == "GLMM") {
     fam <- family$family
     lnk <- family$link
-
+    
     is_allowed <-
       (fam == "gaussian"  && lnk == "identity") ||
       (fam == "binomial"  && lnk == "logit")   ||
       (fam == "poisson"   && lnk == "log")
-
+    
     if (!is_allowed) {
       stop(
         "`family` for method = \"GLMM\" must be one of:\n",
@@ -105,105 +101,126 @@ MRStdCRT_point <- function(formula, data, cluster, trt, trtprob,
       )
     }
   }
-
-
+  
+  
   # Extract all variable names from the formula
   # outcome
+  
   outcome <- all.vars(formula[[2]])
-  rhs_terms <- terms(formula)
-
-  # Extract individual-level covariates (before 'cluster')
-  adj_cov <- attr(rhs_terms, "term.labels")
-
+  
+  rhs_terms   <- terms(formula)
+  term_labels <- attr(rhs_terms, "term.labels")
+  
+  all_vars_in_formula <- setdiff(all.vars(formula), outcome)
+  
+  rhs_syms <- setdiff(all_vars_in_formula, trt)
+  
+  trt_pat <- paste0("(^|:)", trt, "(:|$)")
+  int_labels <- term_labels[grepl(trt_pat, term_labels)]
+  if (length(int_labels) > 0) {
+    partners_raw <- unique(unlist(strsplit(int_labels, ":", fixed = TRUE)))
+    
+    int_partners <- setdiff(partners_raw, trt)
+    
+    int_partners <- intersect(int_partners, rhs_syms)
+  } else {
+    int_partners <- character(0)
+  }
+  
   # following columns need to be checked
-  columns_to_check <- c(outcome, adj_cov, cluster, trt)
-
-  # Check if all columns exist in the data
+  columns_to_check <- c(outcome, rhs_syms, cluster, trt)
+  
   missing_columns <- setdiff(columns_to_check, colnames(data))
-
-  # If any columns are missing, stop and print an error message
   if (length(missing_columns) > 0) {
     stop(paste("Error: The column(s)", paste(missing_columns, collapse = ", "), "do not exist in the data."))
   }
-
-
-  # Check if the treatment is assigned at the cluster-level
-  non_unique_clusters <- tapply(data[[trt]], data[[cluster]], function(x) length(unique(x)) > 1)
-
-  # Find the cluster IDs with mixed values
-  mixed_clusters <- names(non_unique_clusters)[non_unique_clusters]
-
-  # If any clusters have mixed values for 'A', print a warning with the cluster IDs
-  if (length(mixed_clusters) > 0) {
-    warning(paste("Warning: The following clusters have a mixture of 1 and 0", paste(mixed_clusters, collapse = ", ")))
-  }
-  # Create new data set for analysis
-  data1 <- data %>% select(all_of(c(cluster, trt, outcome, adj_cov))) %>%
-    rename(cluster = !!cluster, A = !!trt, Y = !!outcome) %>%
-    arrange(cluster)
+  
+  data1 <- data %>%
+    dplyr::select(dplyr::all_of(c(cluster, trt, outcome, rhs_syms))) %>%
+    dplyr::rename(cluster = !!cluster, A = !!trt, Y = !!outcome) %>%
+    dplyr::arrange(cluster)
+  
   data1$prob <- trtprob
-  if (length(adj_cov) > 0) {
-    adj_cov_names <- paste0("X", seq_along(adj_cov))
-    names(data1)[4:(3 + length(adj_cov))] <- adj_cov_names
-  }else{
+  
+  if (length(rhs_syms) > 0) {
+    adj_cov_names <- paste0("X", seq_along(rhs_syms))
+    map_old2new <- stats::setNames(adj_cov_names, rhs_syms)
+    names(data1)[4:(3 + length(rhs_syms))] <- adj_cov_names
+  } else {
     adj_cov_names <- NULL
+    map_old2new   <- character(0)
   }
-
-  # Calculate cluster sizes if not exists in the cluster level covariates not not exists
-  data1 <- data1 %>% group_by(cluster) %>% mutate(N = n()) %>% ungroup()
-
-
-  # Generate a data frame of cluster means
-  data_clus <- as.data.frame(data1 %>% group_by(cluster) %>% summarise(across(everything(), mean)))
-
-
-
+  
+  data1 <- data1 %>% dplyr::group_by(cluster) %>% dplyr::mutate(N = dplyr::n()) %>% dplyr::ungroup()
+  
+  data_clus <- as.data.frame(data1 %>% dplyr::group_by(cluster) %>% dplyr::summarise(dplyr::across(dplyr::everything(), mean)))
+  
   cluster_vars <- adj_cov_names[sapply(adj_cov_names, function(nm) {
-    # for each variable, check that within every cluster there's only 1 distinct (non-NA) value
     all(tapply(data1[[nm]], data1$cluster, function(v) length(unique(v[!is.na(v)])) == 1))
   })]
-
-
-  ind_cov_names <- adj_cov_names[which(!(adj_cov_names %in% cluster_vars))]
-  # Generate a data frame of cluster means
-  data1 <- data1 %>%
-    group_by(cluster) %>%
-    mutate(across(all_of(ind_cov_names), ~ mean(.x), .names = "{.col}b")) %>%
-    mutate(across(all_of(ind_cov_names), ~ .x - get(paste0(cur_column(), "b")), .names = "{.col}c")) %>%
-    ungroup()
-
-
-  # Build the formula for the individual-level model
-  formulai <- paste("Y ~ A +",
-                    if (length(ind_cov_names) > 0) paste(paste0(ind_cov_names, "c"), collapse = " + ") else "",
-                    if (length(ind_cov_names) > 0) paste(" + ", paste(paste0(ind_cov_names, "b"), collapse = " + "), collapse = " + ") else paste(paste0(adj_cov_names), collapse = " + "),
-                    if (length(cluster_vars) > 0 && (length(ind_cov_names) > 0 || length(cluster_vars) > 0)) paste(" + ", paste(cluster_vars, collapse = " + ")) else paste(cluster_vars, collapse = " + ")
-
+  ind_cov_names <- setdiff(adj_cov_names, cluster_vars)
+  
+  if (length(ind_cov_names) > 0) {
+    data1 <- data1 %>%
+      dplyr::group_by(cluster) %>%
+      dplyr::mutate(dplyr::across(dplyr::all_of(ind_cov_names), ~ mean(.x), .names = "{.col}b")) %>%
+      dplyr::mutate(dplyr::across(dplyr::all_of(ind_cov_names), ~ .x - get(paste0(cur_column(), "b")), .names = "{.col}c")) %>%
+      dplyr::ungroup()
+  }
+  
+  partners_new <- unname(map_old2new[int_partners])
+  partners_new <- partners_new[!is.na(partners_new)]
+  
+  main_terms_i <- c(
+    "A",
+    if (length(ind_cov_names) > 0) paste0(ind_cov_names, "c"),
+    if (length(ind_cov_names) > 0) paste0(ind_cov_names, "b"),
+    if (length(cluster_vars)    > 0) cluster_vars
   )
-
-  # Clean up extra "+" signs
-  formulai <- gsub("\\s+\\+\\s+$", "", formulai)  # Remove trailing "+" if present
-  formulai <- gsub("^\\s+", "", formulai)  # Remove leading spaces
-
-  # Build the formula for the cluster-level model
-  formulac <- paste("Y ~ A +",
-                    if (length(ind_cov_names) > 0) paste(ind_cov_names, collapse = " + ") else "",
-                    if (length(cluster_vars) > 0 && length(ind_cov_names) > 0) paste(" + ", paste(cluster_vars, collapse = " + ")) else paste(cluster_vars, collapse = " + ")
+  
+  
+  ## interaction terms
+  ia_terms_i <- character(0)
+  if (length(partners_new) > 0) {
+    ia_terms_i <- c(
+      if (length(intersect(partners_new, ind_cov_names)) > 0)
+        c(paste0("A:", intersect(partners_new, ind_cov_names), "c"),
+          paste0("A:", intersect(partners_new, ind_cov_names), "b")),
+      if (length(intersect(partners_new, cluster_vars)) > 0)
+        paste0("A:", intersect(partners_new, cluster_vars))
+    )
+  }
+  formulai <- stats::as.formula(
+    paste("Y ~", paste(c(main_terms_i, ia_terms_i), collapse = " + "))
   )
-
+  
+  main_terms_c <- c(
+    "A",
+    if (length(ind_cov_names) > 0) ind_cov_names,
+    if (length(cluster_vars)  > 0) cluster_vars
+  )
+  
+  ia_terms_c <- character(0)
+  if (length(partners_new) > 0) {
+    ia_terms_c <- paste0("A:", partners_new)
+  }
+  formulac <- stats::as.formula(
+    paste("Y ~", paste(c(main_terms_c, ia_terms_c), collapse = " + "))
+  )
+  
+  
   # Clean up extra "+" signs
-  formulac <- gsub("\\s+\\+\\s+$", "", formulac)  # Remove trailing "+" if present
-  formulac <- gsub("^\\s+", "", formulac)  # Remove leading spaces
-
-
-
+  #formulac <- gsub("\\s+\\+\\s+$", "", formulac)  # Remove trailing "+" if present
+  #formulac <- gsub("^\\s+", "", formulac)  # Remove leading spaces
+  
+  
   ## check the method is consistent with family
   #if (method %in% c("LM", "LMM")) {
   #  if (family$family != "gaussian" && family$link != "identity") {
   #    stop("Use 'LM' or 'LMM' with 'identity' link for continuous outcomes")
   #  }
   #}
-
+  
   ## Fit model
   model <- switch(method,
                   "GLM" = try(glm(formulac, data = data_clus,family=family), silent = T),
@@ -212,8 +229,8 @@ MRStdCRT_point <- function(formula, data, cluster, trt, trtprob,
                   "GLMM" =  try(glmer(paste(formulai, "+ (1 | cluster)"), data = data1, family = family),silent = T),
                   stop("Invalid method specified.")
   )
-
-
+  
+  
   if (inherits(model, "try-error")) {
     warning(
       "All-0 or all-1 clusters yield infinite logit with gaussian(link='logit')."
@@ -226,8 +243,8 @@ MRStdCRT_point <- function(formula, data, cluster, trt, trtprob,
       mutate(eta1 = 0, eta0 = 0) %>%
       group_by(cluster) %>%
       as.data.frame()
-
-
+    
+    
   }else{
     if (method == "GLM"){
       # eta: vector containing the predicted outcome in two arms
@@ -237,20 +254,25 @@ MRStdCRT_point <- function(formula, data, cluster, trt, trtprob,
         group_by(cluster) %>%
         as.data.frame()
     } else if (method == "LMM") {
-      if (length(adj_cov_names) == 0 ) {
-        eta <- data_clus %>%
-          mutate(eta1 = as.matrix(cbind(rep(1,nrow(data_clus)),rep(1,nrow(data_clus)))) %*%
-                   as.vector(fixef(model)[c("(Intercept)", "A")])) %>%
-          mutate(eta0 = as.matrix(cbind(rep(1,nrow(data_clus)),rep(0,nrow(data_clus))))  %*%
-                   as.vector(fixef(model)[c("(Intercept)", "A")])) %>%
-          as.data.frame()
-
-      }else{
-        eta <- data_clus %>% mutate(eta1= as.matrix(cbind(rep(1,nrow(data_clus)),rep(1,nrow(data_clus)),data_clus[,c(grep("^X\\d$", names(data_clus)), grep("^H", names(data_clus)))]))%*%as.vector(fixef(model)[-c(grep("^X\\d+c$", names(fixef(model))))])) %>%
-          mutate(eta0 = as.matrix(cbind(rep(1,nrow(data_clus)),rep(0,nrow(data_clus)),data_clus[,c(grep("^X\\d$", names(data_clus)), grep("^H", names(data_clus)))]))%*%as.vector(fixef(model)[-c(grep("^X\\d+c$", names(fixef(model))))])) %>%
-          as.data.frame()
-      }
-
+      # level = 0: use fixed effects
+      nd1 <- data1; nd1$A <- 1
+      nd0 <- data1; nd0$A <- 0
+      
+      # fixed effects coefficient
+      beta <- fixef(model)
+      
+      # design matrix
+      mm1 <- model.matrix(formulai, data = nd1)
+      mm0 <- model.matrix(formulai, data = nd0)
+      
+      p1 <- as.numeric(mm1 %*% beta)
+      p0 <- as.numeric(mm0 %*% beta)
+      
+      eta <- dplyr::tibble(cluster = data1$cluster, eta1 = p1, eta0 = p0) %>%
+        dplyr::group_by(cluster) %>%
+        dplyr::summarise(eta1 = mean(eta1), eta0 = mean(eta0), .groups = "drop")
+      
+      
     } else if (method == "GEE") {
       eta <- data1 %>% mutate(eta1= predict(model, newdata = mutate(data1, A = 1), type = "response")) %>%
         mutate(eta0 = predict(model, newdata = mutate(data1, A = 0), type = "response")) %>%
@@ -259,8 +281,11 @@ MRStdCRT_point <- function(formula, data, cluster, trt, trtprob,
         summarise_all(mean) %>%
         as.data.frame()
     } else if (method == "GLMM") {
-      pred1 <- as.matrix(cbind(rep(1,nrow(data1)),rep(1,nrow(data1)),data1[,c(grep("^X\\d+c$", names(data1)), grep("^X\\d+b$", names(data1)), grep("^H\\d+$", names(data1)))]))%*%as.vector(fixef(model))
-      pred0 <- as.matrix(cbind(rep(1,nrow(data1)),rep(0,nrow(data1)),data1[,c(grep("^X\\d+c$", names(data1)), grep("^X\\d+b$", names(data1)), grep("^H\\d+$", names(data1)))]))%*%as.vector(fixef(model))
+      #pred1 <- as.matrix(cbind(rep(1,nrow(data1)),rep(1,nrow(data1)),data1[,c(grep("^X\\d+c$", names(data1)), grep("^X\\d+b$", names(data1)), grep("^H\\d+$", names(data1)))]))%*%as.vector(fixef(model))
+      #pred0 <- as.matrix(cbind(rep(1,nrow(data1)),rep(0,nrow(data1)),data1[,c(grep("^X\\d+c$", names(data1)), grep("^X\\d+b$", names(data1)), grep("^H\\d+$", names(data1)))]))%*%as.vector(fixef(model))
+      pred1 <- predict(model, newdata = transform(data1, A = 1), re.form = NA, type = "link")
+      pred0 <- predict(model, newdata = transform(data1, A = 0), re.form = NA, type = "link")
+      
       if(family$link=="logit"){
         # Pi: mathematical constant
         Pi <- 3.141592653589793
@@ -272,9 +297,9 @@ MRStdCRT_point <- function(formula, data, cluster, trt, trtprob,
           group_by(cluster) %>%
           summarise(eta1 = mean(eta1), eta0 = mean(eta0)) %>%
           as.data.frame()
-
+        
       }else if(family$link=="log"){
-
+        
         eta <- data1 %>%
           mutate(
             eta1 = exp(pred1 + as.numeric(VarCorr(model)) / 2),
@@ -283,15 +308,15 @@ MRStdCRT_point <- function(formula, data, cluster, trt, trtprob,
           group_by(cluster) %>%
           summarise(eta1 = mean(eta1), eta0 = mean(eta0)) %>%
           as.data.frame()
-
+        
       }
-
+      
     }
-
+    
   }
-
-
-
+  
+  
+  
   #####################Point estimates using our proposed methods###############
   mu_C1 <- data_clus$A / data_clus$prob * (data_clus$Y - eta$eta1) + eta$eta1
   mu_C0 <- (1-data_clus$A) / (1-data_clus$prob) * (data_clus$Y - eta$eta0) + eta$eta0
@@ -307,16 +332,9 @@ MRStdCRT_point <- function(formula, data, cluster, trt, trtprob,
                  "RR" = mean(mu_I1)/mean(mu_I0),
                  "OR" =  mean(mu_I1)/(1-mean(mu_I1))/mean(mu_I0)*(1-mean(mu_I0)),
                  stop("Invalid scales specified."))
-
+  
   test_NICS <-  cate - iate
   return(list(data1,
               data_clus,
               c(cate,iate,test_NICS)))
 }
-
-
-
-
-
-
-
