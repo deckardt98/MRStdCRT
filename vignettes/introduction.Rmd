@@ -1,15 +1,15 @@
 ---
-title: "Model-robust standardization in cluster-randomized trials"
-subtitle: "Estimands and doubly robust estimation for cluster-randomized trials with survival outcomes"
-output: html_document
+title: "Introduction to MRStdCRT"
+output: rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{Introduction to MRStdCRT Package}
+  %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
-  %\VignetteEngine{rmarkdown::rmarkdown}
-editor_options: 
-  markdown: 
+editor_options:
+  markdown:
     wrap: 72
 ---
+
 
 # Introduction
 
