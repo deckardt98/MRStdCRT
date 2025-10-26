@@ -1,21 +1,21 @@
 Package: MRStdCRT
 Type: Package
-Title: Model-robust standardization in cluster-randomized trials
+Title: Model-Robust Standardization in Cluster-Randomized Trials
 Version: 0.1.0
 Author: Jiaqi Tong, Changjun Li, Xi Fang, Chao Cheng, Bingkai Wang, Fan Li.
 Maintainer: Changjun Li <changjun.li@yale.edu>
-Description: This package provides a simple and accesible methods to standardize output from user-specified regression model to estimate the estimand for treatment effect parameters in cluster-randomized trials(CRT). The estimands including cluster-average and individual-average treatment effects
+Description: Implements model-robust standardization for cluster-randomized trials (CRTs). Provides functions that standardize user-specified regression models to estimate marginal treatment effects. The estimands include the cluster-average and individual-average treatment effects, with utilities for variance estimation and example simulation datasets.
 License: GPL-3
 Encoding: UTF-8
 LazyData: true
-Depends: 
-    R (>= 3.6),
-    dplyr (>= 1.0.0), 
-    geepack (>= 1.3-2), 
-    lme4 (>= 1.1-25), 
-    nlme (>= 3.1-150)
-Imports: dplyr (>= 1.0.0), geepack (>= 1.3-2), lme4 (>= 1.1-25), nlme
-        (>= 3.1-150)
+Depends:
+    R (>= 4.1)
+Imports:
+    dplyr (>= 1.0.0),
+    geepack (>= 1.3-2),
+    lme4 (>= 1.1-25),
+    nlme (>= 3.1-150),
+    stats
 VignetteBuilder: knitr
 Suggests: knitr, rmarkdown
 RoxygenNote: 7.3.2
