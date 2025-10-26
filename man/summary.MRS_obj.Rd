@@ -4,7 +4,7 @@
 \alias{summary.MRS_obj}
 \title{Summarize a \code{MRS_obj} Fit}
 \usage{
-\method{summary}{MRS_obj}(object)
+\method{summary}{MRS_obj}(object, ...)
 }
 \arguments{
 \item{object}{An object of class \code{MRS_obj}, as returned by

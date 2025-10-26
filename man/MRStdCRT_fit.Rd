@@ -25,7 +25,7 @@ MRStdCRT_fit(
 
 \item{cluster}{A string representing the column name of the cluster ID in the data frame.}
 
-\item{trt}{A string representing the column name of the treatment assignment per cluster (0=control, 1=treatemnt).}
+\item{trt}{A string representing the column name of the treatment assignment per cluster (0=control, 1=treatment).}
 
 \item{trtprob}{A vector of treatment probabilities per cluster (for each individual), conditional on covariates. Default is rep(0.5,nrow(data))}
 
@@ -59,7 +59,7 @@ A list with the following components:
 }
 \description{
 This function performs cluster randomized trials (CRT) analysis using model-robust standardization estimators to estimate the cluster-average and individual-average treatment effect.
-It handles different outcome mean models (GLM, LMM, GEE, GLMM) and supports both continuous, binary, and count outcomes with options for different correlation structures and scales (risk different, risk ratio and odds ratio).
+It handles different outcome mean models (GLM, LMM, GEE, GLMM) and supports both continuous, binary, and count outcomes with options for different correlation structures and scales (risk difference, risk ratio and odds ratio).
 }
 \examples{
 \dontrun{
@@ -75,7 +75,7 @@ prob <- ppact_prob$assigned_value
 
 example <- MRStdCRT_fit(
   formula = PEGS ~ AGE + FEMALE + comorbid + Dep_OR_Anx + pain_count+PEGS_bl +
-   BL_benzo_flag + BL_avg_daily + satisfied_primary + cluster(n),
+   BL_benzo_flag + BL_avg_daily + satisfied_primary + n,
  data = ppact,
  cluster = "CLUST",
  trt = "INTERVENTION",
