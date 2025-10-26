@@ -1,12 +1,12 @@
 #' Model-robust Standardization Estimators for the Cluster Randomized Trials
 #'
 #' This function performs cluster randomized trials (CRT) analysis using model-robust standardization estimators to estimate the cluster-average and individual-average treatment effect.
-#' It handles different outcome mean models (GLM, LMM, GEE, GLMM) and supports both continuous, binary, and count outcomes with options for different correlation structures and scales (risk different, risk ratio and odds ratio).
+#' It handles different outcome mean models (GLM, LMM, GEE, GLMM) and supports both continuous, binary, and count outcomes with options for different correlation structures and scales (risk difference, risk ratio and odds ratio).
 #'
 #' @param formula A formula for the outcome mean model, including covariates.
 #' @param data A data frame where categorical variables should already be converted to dummy variables.
 #' @param cluster A string representing the column name of the cluster ID in the data frame.
-#' @param trt A string representing the column name of the treatment assignment per cluster (0=control, 1=treatemnt).
+#' @param trt A string representing the column name of the treatment assignment per cluster (0=control, 1=treatment).
 #' @param trtprob A vector of treatment probabilities per cluster (for each individual), conditional on covariates. Default is rep(0.5,nrow(data))
 #' @param method A string specifying the outcome mean model. Possible values are:
 #'     - 'GLM': generalized linear model on cluster-level means (binary/continuous outcome).
@@ -29,12 +29,11 @@
 #'   - `N`: Total number of observations per cluster.
 #'   - `family`: The family used for the model.
 #'   - `model`: The method used for the outcome mean model.
-#' @import dplyr
-#' @import geepack
-#' @import lme4
-#' @import nlme
-#' @importFrom geepack geeglm dplyr geepack
-#' @importFrom stats formula lme4
+#' @importFrom stats gaussian binomial poisson qt pt as.formula formula model.matrix predict terms var
+#' @importFrom dplyr group_by mutate ungroup filter first
+#' @importFrom geepack geeglm
+#' @importFrom lme4 glmer
+#' @importFrom nlme lme
 #'
 #' @export
 #'
@@ -67,7 +66,7 @@
 
 MRStdCRT_fit <- function(formula, data, cluster, trt, trtprob=rep(0.5, nrow(data)), method, family = gaussian(link="identity"),
                          corstr, scale, jack = 1, alpha=0.05){
-  
+
   ################################################################
   #                                                              #
   #   Input:                                                     #
@@ -104,7 +103,7 @@ MRStdCRT_fit <- function(formula, data, cluster, trt, trtprob=rep(0.5, nrow(data
   #         recommended for small number of clusters.            #
   #    alpha: type-I error rate.                                 #
   ################################################################
-  
+
   if (is.null(trtprob)) {
     suppressWarnings({
       df_prob <- data |>
@@ -139,12 +138,12 @@ MRStdCRT_fit <- function(formula, data, cluster, trt, trtprob=rep(0.5, nrow(data
       warning("Some entries of `trtprob` are not in (0,1). Please verify they are valid assignment probabilities.")
     }
   }
-  
-  
+
+
   temp <- MRStdCRT_point(formula, data, cluster, trt, trtprob,
                          family,
                          corstr, method, scale)
-  
+
   data1 <- temp[[1]]
   data_clus <- temp[[2]]
   m <- nrow(data_clus)
@@ -185,20 +184,20 @@ MRStdCRT_fit <- function(formula, data, cluster, trt, trtprob=rep(0.5, nrow(data
                        "CI lower",
                        "CI upper")
   table <- as.data.frame(table)
-  
+
   tstat_est <- table[,"Estimate"] / table[,"Std. Error"]
   pval_est  <- 2 * pt(abs(tstat_est), df = m-1, lower.tail = FALSE)
   table[,"p-value"] <- pval_est
-  
-  
+
+
   #test statistic for NICS
-  
-  
+
+
   test_sta <- pes[3]/jackse[3]
   p_val <- min((1-pt(test_sta, df = m-1, ncp = 0)),pt(test_sta, df = m-1, ncp = 0))*2
-  
+
   ics_test <- c(test_sta, p_val)
-  
+
   fit_list <- list(
     estimate = table,
     m        = m,
@@ -209,10 +208,10 @@ MRStdCRT_fit <- function(formula, data, cluster, trt, trtprob=rep(0.5, nrow(data
     alpha    = alpha,
     scale    = scale
   )
-  
+
   class(fit_list) <- "MRS_obj"
-  
-  
+
+
   return(fit_list)
 }
 
@@ -238,12 +237,12 @@ MRStdCRT_fit <- function(formula, data, cluster, trt, trtprob=rep(0.5, nrow(data
 #'
 #' @export
 #' @method summary MRS_obj
-summary.MRS_obj <- function(object) {
+summary.MRS_obj <- function(object,...) {
   stopifnot(inherits(object, "MRS_obj"))
-  
+
   alpha <- if (!is.null(object$alpha)) object$alpha else 0.05
   ci_label <- paste0((1 - alpha/2)*100, "% CI")
-  
+
   cat("\nModel-robust Standardization\n")
   cat("=========================================\n")
   cat(sprintf("  Method   : %s\n", object$model))
@@ -259,19 +258,19 @@ summary.MRS_obj <- function(object) {
     object$scale
   )
   cat(sprintf("  Scale    : %s\n", scale_label))
-  
-  
-  
+
+
+
   tbl <- object$estimate
   rownames(tbl) <- c("c-ATE", "i-ATE")
-  
+
   p <- tbl[,"p-value"]
   stars <- ifelse(p < 0.001, "***",
                   ifelse(p < 0.01,  "**",
                          ifelse(p < 0.05,  "*", "")))
-  
+
   p_str <- ifelse(p < 1e-3, "<0.001", formatC(p, digits = 3, format = "f"))
-  
+
   disp <- data.frame(
     Estimate     = formatC(tbl[,"Estimate"],     digits = 3, format = "f"),
     `Std. Error` = formatC(tbl[,"Std. Error"],   digits = 3, format = "f"),
@@ -287,23 +286,23 @@ summary.MRS_obj <- function(object) {
     check.names  = FALSE,
     stringsAsFactors = FALSE
   )
-  
+
   cat("\nEstimates:\n")
   print(disp)
-  
+
   cat("\nTest for no informative cluster size:\n")
   cat(sprintf("  Statistic: %.4f\n", object$ics[1]))
-  
+
   p_ics <- object$ics[2]
   stars_ics <- ifelse(p_ics < 0.001, "***",
                       ifelse(p_ics < 0.01,  "**",
                              ifelse(p_ics < 0.05,  "*", "")))
   p_ics_str <- ifelse(p_ics < 1e-3, "<0.001",
                       formatC(p_ics, digits = 4, format = "f"))
-  
+
   cat(sprintf("  p-value  : %s%s\n\n", p_ics_str, stars_ics))
   #cat(sprintf("  DF       : %d\n", object$m-1))
-  
+
   invisible(object)
 }
 
