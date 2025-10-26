@@ -34,6 +34,8 @@
 #' @importFrom geepack geeglm
 #' @importFrom lme4 glmer
 #' @importFrom nlme lme
+#' @importFrom lme4 fixef
+#' @importFrom nlme fixef
 #'
 #' @export
 #'
